@@ -1,2 +1,4 @@
 fastmcp
-flaticon
+aiohttp>=3.9
+beautifulsoup4
+aiofiles

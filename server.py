@@ -1,20 +1,16 @@
-import asyncio
 import base64
-import inspect
+import shutil
+import uuid
 from pathlib import Path
 
 from fastmcp import FastMCP
-from flaticon import FlatIconClient
 from mcp.types import ImageContent, TextContent
+
+from flaticon import FlatIconClient  # vendored copy in ./flaticon
 
 mcp = FastMCP("Flaticon Icons")
 
-# Default folder the flaticon library downloads into (same as your test script)
-DEFAULT_DIR = Path.home() / "flaticon"
 MAX_COUNT = 10
-
-# download dir is shared, so handle one request at a time to avoid mixing files
-_lock = asyncio.Lock()
 
 
 @mcp.tool
@@ -26,38 +22,42 @@ async def search_icons(query: str, count: int = 3) -> list:
         count: Number of PNG images wanted (1-10).
     """
     count = max(1, min(int(count), MAX_COUNT))
-    DEFAULT_DIR.mkdir(parents=True, exist_ok=True)
 
-    async with _lock:
-        before = set(DEFAULT_DIR.glob("*.png"))
+    # unique temp folder per request (under the home dir, as the library expects)
+    rel = f"flaticon_tmp/{uuid.uuid4().hex}"
+    tmp_dir = Path.home() / rel
 
-        async with FlatIconClient() as client:
-            res = client.search_for_images(query, count=count)
-            images = await res if inspect.isawaitable(res) else res
-            for img in images:
-                dl = client.download_image(img)
-                if inspect.isawaitable(dl):
-                    await dl
+    try:
+        async with FlatIconClient(relative_path=rel) as client:
+            found = await client.search_for_images(query, count=count)
 
-        new_files = sorted(set(DEFAULT_DIR.glob("*.png")) - before)
+            paths, captions, seen = [], [], set()
+            for img in found:
+                p = await client.download_image(img)
+                if p in seen or not p.exists() or p.stat().st_size == 0:
+                    continue
+                seen.add(p)
+                paths.append(p)
+                captions.append(f"{len(paths)}. {img.name} (pack: {img.pack})")
 
-        results = []
-        for f in new_files[:count]:
-            data = f.read_bytes()
-            results.append(
+        if not paths:
+            return [TextContent(type="text", text=f"No icons found for '{query}'.")]
+
+        out = [TextContent(type="text", text=f"{len(paths)} PNG icons for '{query}':\n" + "\n".join(captions))]
+        for p in paths:
+            out.append(
                 ImageContent(
                     type="image",
-                    data=base64.b64encode(data).decode(),
+                    data=base64.b64encode(p.read_bytes()).decode(),
                     mimeType="image/png",
                 )
             )
-            f.unlink(missing_ok=True)  # keep server disk clean
+        return out
 
-    if not results:
-        return [TextContent(type="text", text=f"No icons found for '{query}'.")]
-
-    results.insert(0, TextContent(type="text", text=f"{len(results)} PNG icons for '{query}':"))
-    return results
+    except Exception as e:
+        return [TextContent(type="text", text=f"Icon search failed: {type(e).__name__}: {e}")]
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
 if __name__ == "__main__":
