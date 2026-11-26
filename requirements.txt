@@ -1,4 +1,5 @@
+--no-index
+--find-links ./wheels
 fastmcp
 aiohttp>=3.9
 beautifulsoup4
-aiofiles

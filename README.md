@@ -1,9 +1,12 @@
 # FLATICON_MCP_TOOL
 
-FastMCP server (hosted on Prefect Horizon) with one tool, `search_icons(query, count)`,
-that returns PNG icons from Flaticon as images.
+FastMCP server (Prefect Horizon) with one tool, `search_icons(requests)`.
+One request per line: `query,type,number` — type `I` icons, `S` stickers, `A` animated (GIF).
 
-Entrypoint: `server.py:mcp`
+- Entrypoint: `server.py:mcp`
+- Requirements: `requirements.txt` (installs offline from `wheels/`, built for Linux x86_64 / Python 3.12)
 
-`flaticon/` is a vendored, lightly patched copy of the `flaticon` 1.0.2 package (Apache-2.0),
-because the PyPI release pins `aiohttp==3.8.4`, which can't build on Python 3.12.
+To go back to installing from PyPI, delete the first two lines of `requirements.txt`.
+
+Rebuild the wheels:
+    pip download -r requirements.txt -d wheels --only-binary=:all: --python-version 3.12 --implementation cp --abi cp312 --abi abi3 --abi none --platform manylinux2014_x86_64 --platform manylinux_2_17_x86_64 --platform manylinux_2_28_x86_64 --platform any
